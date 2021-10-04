@@ -17,7 +17,7 @@ class Parser():
         #check for empty file
         if len(self.lines) < 1:
             raise ValueError('assembly file is empty')
-        print(self.lines)
+        #print(self.lines)
         # Attributes:
         self.current_index = 0
         self.current_command = self.lines[self.current_index]
