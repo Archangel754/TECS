@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+# TODO:
+# modify Acommand,Lcommand handling to handle variables and labels
 
 def assembler_main(filename):
     from parser import Parser
@@ -8,8 +10,12 @@ def assembler_main(filename):
     # load parser object with assembly file
     asm = Parser(filename)
 
+    
+    
+    
     # generate list of assembly commands:
     machine_code = []
+    next_variable_loc = 16
     finished = False
     while finished == False:
         if asm.has_more_commands() == False:
@@ -17,7 +23,21 @@ def assembler_main(filename):
         #print('is true')
         #print(asm.current_command)
         if asm.command_type() == 'A_COMMAND':
-            machine_code.append ('0' + assembler_convert_to_15bit_bin(asm.symbol()))
+            
+            # check if not a variable:
+            if asm.symbol().isdecimal():
+                machine_code.append ('0' + assembler_convert_to_15bit_bin(asm.symbol()))
+            elif asm.sym_table.contains(asm.symbol()):
+                # variable or label is alread in the table. set @ instr with value.
+                loc_string = str(asm.sym_table.get_address(asm.symbol()))
+                machine_code.append ('0' + assembler_convert_to_15bit_bin(loc_string))
+
+            else:
+                # variable hasn't been used. add it to table and set @ instr.
+                asm.sym_table.add_entry(asm.symbol(),next_variable_loc)
+                machine_code.append ('0' + assembler_convert_to_15bit_bin(str(next_variable_loc)))
+                next_variable_loc += 1
+                
             
         elif asm.command_type() == 'C_COMMAND':
             command = []
@@ -28,7 +48,8 @@ def assembler_main(filename):
             machine_code.append(''.join(command))
             
         elif asm.command_type() == 'L_COMMAND':
-            pass
+            raise ValueError('L commands should have been dealt with by parser.')
+        
 
         if asm.has_more_commands() == True:
             asm.advance()
