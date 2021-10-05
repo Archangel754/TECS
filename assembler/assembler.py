@@ -10,7 +10,10 @@ def assembler_main(filename):
 
     # generate list of assembly commands:
     machine_code = []
-    while asm.has_more_commands() == True:
+    finished = False
+    while finished == False:
+        if asm.has_more_commands() == False:
+            finished = True
         #print('is true')
         #print(asm.current_command)
         if asm.command_type() == 'A_COMMAND':
@@ -26,22 +29,11 @@ def assembler_main(filename):
             
         elif asm.command_type() == 'L_COMMAND':
             pass
-        asm.advance()
 
-    # do the final line (because has more commands is false here):
-    if asm.command_type() == 'A_COMMAND':
-        machine_code.append ('0' + assembler_convert_to_15bit_bin(asm.symbol()))
-            
-    elif asm.command_type() == 'C_COMMAND':
-        command = []
-        command.append('111')
-        command.append(code(asm.comp(),'comp'))
-        command.append(code(asm.dest(),'dest'))
-        command.append(code(asm.jump(),'jump'))
-        machine_code.append(''.join(command))
-            
-    elif asm.command_type() == 'L_COMMAND':
-        pass
+        if asm.has_more_commands() == True:
+            asm.advance()
+
+
     # write the machine code to file with basename + .hack (overwrites)
     #print(machine_code)
     base_name = filename[:filename.find('.asm')]
