@@ -60,7 +60,7 @@ class Parser():
         if '=' in self.current_command:
             return self.current_command.split('=')[0]
         else:
-            raise ValueError('inappropriate call of parser.dest')
+            return 'null'
         
     def comp(self):
         if '=' in self.current_command:
