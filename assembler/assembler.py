@@ -1,8 +1,5 @@
 #!/usr/bin/python3
 
-# TODO:
-# modify Acommand,Lcommand handling to handle variables and labels
-
 def assembler_main(filename):
     from parser import Parser
     from code import code
