@@ -1,0 +1,9 @@
+# ignore python cache files:
+__pycache__/
+
+# ignore OS X files:
+.DS_Store
+
+# ignore sample .hack and .asm files:
+assembler/asm_files/
+assembler/hack_files/
