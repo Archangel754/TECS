@@ -1,5 +1,10 @@
 #!/usr/bin/python3
 
+# Takes a .asm assembly file as command line argument and
+# converts it to a .hack file in the same directory, which is
+# written in machine language to run on the HACK Computer(TECS).
+# Tested on both python 3.8.2 and 3.10.0
+
 def assembler_main(filename):
     from parser import Parser
     from code import code
