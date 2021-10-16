@@ -12,12 +12,20 @@ def VMtranslator_main(filename):
     import os
     #handle directory or .vm file
     if os.path.isdir(filename):
+        if filename[-1] == '/':
+            base_name = filename[:-1]
+        else:
+            base_name = filename
+            filename += '/'
+        
         # make vmfilelist a list of all .vm files in directory:
         vmfilelist = []
         # walk the directory recursively and add only file names to vmfilelist:
-        for (dirpath_unused, dirnames_unused,insidefilenames) in os.walk(filename):
-            vmfilelist.extend(insidefilenames)
-        base_name = filename # for output file name
+        for (dirpath, dirnames,insidefilenames) in os.walk(filename):
+            vmfilelist.extend(os.path.join(dirpath,insidefilename) for insidefilename in insidefilenames)
+        #print(vmfilelist)
+        #base_name = filename # for output file name
+        #print('base_name: ',base_name)
         
     else:
         vmfilelist = [filename]
@@ -28,7 +36,7 @@ def VMtranslator_main(filename):
     asm_name = base_name + '.asm'
     writer = VMCodeWriter(asm_name)
 
-    for vmfile in vmfilelist: # will change for multiple files
+    for vmfile in [vfile for vfile in vmfilelist if vfile[-3:] == '.vm']: # will change for multiple files
         parser = VMParser(vmfile) # change to loop over files
         writer.set_file_name(vmfile) # doesn't really do anything yet.may add label later.
         finished = False

@@ -42,6 +42,10 @@ class VMParser():
         #         counter += 1
         # self.lines = newlines
 
+        #testing:
+        #print('inputfile:',input_file_name)
+        #print(self.lines)
+        
         # Attributes:
         self.current_index = 0
         self.current_command = self.lines[self.current_index]
