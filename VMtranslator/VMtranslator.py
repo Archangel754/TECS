@@ -38,7 +38,7 @@ def VMtranslator_main(filename):
 
     for vmfile in [vfile for vfile in vmfilelist if vfile[-3:] == '.vm']: # will change for multiple files
         parser = VMParser(vmfile) # change to loop over files
-        writer.set_file_name(vmfile) # doesn't really do anything yet.may add label later.
+        writer.set_file_name(vmfile[:-3]) # doesn't really do anything yet.may add label later.
         finished = False
         while finished == False:
             if parser.has_more_commands() == False:
@@ -50,7 +50,8 @@ def VMtranslator_main(filename):
                     writer.write_arithmetic(command = parser.current_command) # 'add', 'eq', etc.
                 case 'C_PUSH':
                     writer.write_push_pop(command = 'push', segment = parser.arg1(), index = parser.arg2())
-
+                case 'C_POP':
+                    writer.write_push_pop(command = 'pop', segment = parser.arg1(), index = parser.arg2())
                 # other cases to add here soon
 
 

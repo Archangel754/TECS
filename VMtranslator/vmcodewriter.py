@@ -20,6 +20,8 @@ class VMCodeWriter():
         place them in A,D,M as appropriate. Perform the 
         selected operation. Then move result from D
         onto the top of the stack. """
+        # add a comment:
+        self.lines.append(f"// write_arithmetic:{command}:")
         match command:
             #
             case 'add':
@@ -59,6 +61,8 @@ class VMCodeWriter():
         self._writeDtostack()
 
     def write_push_pop(self,command: str, segment: str, index: int):
+        # add a comment:
+        self.lines.append(f"// write_push_pop:{command} {segment} {index}:")
         # implement push constant x:
         match command:
             case 'push':
@@ -67,13 +71,84 @@ class VMCodeWriter():
                         # index is the number to push onto the stack
                         # (this string of commands has been tested in assembler)
                         command_string = ["@" + str(index),
+                                              "D=A", # value to push to stack is now in D
+                                              ]
+                    case ('local' | 'argument' | 'this' | 'that') as segment:
+                        seg_dict = {'local':'LCL','argument':'ARG','this':'THIS','that':'THAT'}
+                        command_string = [f"@{seg_dict[segment]}",
+                                              "D=M", #D is the address of base of segment
+                                              f"@{str(index)}",
+                                              "A=D+A", #A is now address of segment(base+index)
+                                              "D=M", # value to push to stack is now in D
+                                              ]
+                    case ('pointer' | 'temp') as segment:
+                        seg_dict = {'pointer':3,'temp':5}
+                        command_string = [f"@{str(seg_dict[segment]+index)}",
+                                              "D=M" #D is the contents of address: pointer i or temp i
+                                              ]
+                    case 'static':
+                        var_name = f'{self.current_vm_file_name}.{str(index)}'
+                        command_string = [f"@{var_name}",
+                                              "D=M" #value of static[index] to push to stack is now in D
+                                              ]
+                                              
+                # now push D onto stack
+                command_string.extend(["@SP",
+                                           "A=M // A now points to top of stack",
+                                           "M=D",
+                                           "// now inc stack pointer:",
+                                           "@SP",
+                                           "M=M+1"])
+            case 'pop':
+                #print('found a pop',command,segment,index)
+                match segment:
+                    # get segment address
+                    # get base + i address put in D
+                    # pop something off stack into A
+                    case ('local' | 'argument' | 'this' | 'that') as segment:
+                        seg_dict = {'local':'LCL','argument':'ARG','this':'THIS','that':'THAT'}
+                        command_string = [f"@{seg_dict[segment]}",
+                                              "D=M", #D is the address of base of local
+                                              f"@{str(index)}",
+                                              "A=D+A", #A is now address of segment(base+index)
                                               "D=A",
+                                              "@R13",
+                                              "M=D", #Storing address temporarily in R13
+                                              "//get something from stack:",
                                               "@SP",
                                               "A=M // A now points to top of stack",
-                                              "M=D",
-                                              "// now inc stack pointer:",
+                                              "A=A-1 // A points to topmost item on stack",
+                                              "D=M", # D holds item popped from stack
                                               "@SP",
-                                              "M=M+1"]
+                                              "M=M-1", # decrement the stack pointer
+                                              "@R13", 
+                                              "A=M", # A is now address to pop stack to
+                                              "M=D" # item popped from stack is put in segment[index]
+                                              ]
+                    case ('pointer' | 'temp') as segment:
+                        seg_dict = {'pointer':3,'temp':5}
+                        command_string = ["//get something from stack:",
+                                              "@SP",
+                                              "A=M // A now points to top of stack",
+                                              "A=A-1 // A points to topmost item on stack",
+                                              "D=M", # D holds item popped from stack
+                                              "@SP",
+                                              "M=M-1", # decrement the stack pointer
+                                              f"@{str(seg_dict[segment]+index)}", # address to pop stack to
+                                              "M=D" # item popped from stack is put in segment[index]
+                                              ]
+                    case 'static':
+                        var_name = f'{self.current_vm_file_name}.{str(index)}'
+                        command_string = ["//get something from stack:",
+                                              "@SP",
+                                              "A=M // A now points to top of stack",
+                                              "A=A-1 // A points to topmost item on stack",
+                                              "D=M", # D holds item popped from stack
+                                              "@SP",
+                                              "M=M-1", # decrement the stack pointer
+                                              f"@{var_name}",
+                                              "M=D" #value of static[index] set to value popped from stack
+                                              ]
         self.lines.extend(command_string)
 
     def close(self):
@@ -122,53 +197,3 @@ class VMCodeWriter():
         self.lines.extend(command_string)
 
 
-
-""" Replaced code from match:
-            case 'eq':
-                self._getxandy()
-                command_string = ["D=A-D",
-                                      f"@TRUE{str(self.unique)}",
-                                      "D;JEQ", # jump to (TRUE...) if x == y
-                                      # f"(FALSE{str(self.unique)})", not needed
-                                      "D=0", # set D to false
-                                      f"@CONTINUE{str(self.unique)}",
-                                      "0;JMP", # goto continue to skip setting D to true
-                                      f"(TRUE{str(self.unique)})",
-                                      "D=-1",
-                                      f"(CONTINUE{str(self.unique)})"]
-                self.lines.extend(command_string)
-                self.unique += 1
-                self._writeDtostack()
-
-            case 'gt':
-                self._getxandy()
-                command_string = ["D=A-D",
-                                      f"@TRUE{str(self.unique)}",
-                                      "D;JGT", # jump to (TRUE...) if x > y
-                                      # f"(FALSE{str(self.unique)})", not needed
-                                      "D=0", # set D to false
-                                      f"@CONTINUE{str(self.unique)}",
-                                      "0;JMP", # goto continue to skip setting D to true
-                                      f"(TRUE{str(self.unique)})",
-                                      "D=-1",
-                                      f"(CONTINUE{str(self.unique)})"]
-                self.lines.extend(command_string)
-                self.unique += 1
-                self._writeDtostack()
-            case 'lt':
-                self._getxandy()
-                command_string = ["D=A-D",
-                                      f"@TRUE{str(self.unique)}",
-                                      "D;JLT", # jump to (TRUE...) if x < y
-                                      # f"(FALSE{str(self.unique)})", not needed
-                                      "D=0", # set D to false
-                                      f"@CONTINUE{str(self.unique)}", 
-                                      "0;JMP", # goto continue to skip setting D to true
-                                      f"(TRUE{str(self.unique)})",
-                                      "D=-1",
-                                      f"(CONTINUE{str(self.unique)})"]
-                self.lines.extend(command_string)
-                self.unique += 1
-                self._writeDtostack()
-
-"""
