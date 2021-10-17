@@ -35,7 +35,9 @@ def VMtranslator_main(filename):
     # set output file name and initialize writer:
     asm_name = base_name + '.asm'
     writer = VMCodeWriter(asm_name)
-
+    # initialization:
+    #writer.write_init()
+    
     for vmfile in [vfile for vfile in vmfilelist if vfile[-3:] == '.vm']: # will change for multiple files
         parser = VMParser(vmfile) # change to loop over files
         writer.set_file_name(vmfile[:-3]) # doesn't really do anything yet.may add label later.
@@ -44,6 +46,8 @@ def VMtranslator_main(filename):
             if parser.has_more_commands() == False:
                 finished = True
             # Deal with translating current command line:
+            # add comment for current line:
+            writer.write_comment(f"Source line:{parser.current_command}")
             ctype = parser.command_type()
             match ctype:
                 case 'C_ARITHMETIC':
@@ -53,7 +57,18 @@ def VMtranslator_main(filename):
                 case 'C_POP':
                     writer.write_push_pop(command = 'pop', segment = parser.arg1(), index = parser.arg2())
                 # other cases to add here soon
-
+                case 'C_LABEL':
+                    writer.write_label(label = parser.arg1())
+                case 'C_GOTO':
+                    writer.write_goto(label = parser.arg1())
+                case 'C_IF':
+                    writer.write_if(label = parser.arg1())
+                case 'C_FUNCTION':
+                    writer.write_function(function_name = parser.arg1(), num_locals = parser.arg2())
+                case 'C_RETURN':
+                    writer.write_return()
+                case 'C_CALL':
+                    writer.write_call(function_name = parser.arg1(), num_args = parser.arg2())
 
             if parser.has_more_commands() == True:
                 parser.advance()

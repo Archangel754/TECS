@@ -1,8 +1,11 @@
 
 class VMCodeWriter():
-    """ Takes a .asm file name when initialized.
+    """Write a .asm file line by line.
+    
+    Takes a .asm file name when initialized.
     Returns object which provides functions for writing 
-    assembly commands to file from vm code. """
+    assembly commands to file from vm code."""
+    
     def __init__(self,output_file_name):
         # initialize the stack?
         # SP is SP special symbol in assembly so '@SP'
@@ -10,20 +13,173 @@ class VMCodeWriter():
         self.lines = []
         self.unique = 111
         self.output_file_name = output_file_name
+        self.current_function_name = ''
 
     def set_file_name(self,current_vm_file_name):
+        """Set name of the current .vm file. Used internally by VM."""
         self.current_vm_file_name = current_vm_file_name
         # will this add a label for each .vm file in assembly code later?
 
+    ###################################### VMII ######################################
+    # The following functions implement Ch 8
+    # function handling: if, goto, labels, and subroutine calling.
+    def write_init(self):
+        """Generate assembly for VM initialization(bootstrap code). 
+        Must go at the beginning of .asm file."""
+        command_list = ["@256",
+                            "D=A",
+                            "@SP",
+                            "M=D", #R0/SP is now 256
+                            "@Sys.init",
+                            "0;JMP" # unconditional jump to sys.init
+                            ]
+        self.lines.extend(command_list)
+        # do LCL, ARG, THIS, THAT need to be initialized here?
+#       # should follow same stack setup format as write_call()?
+
+    def write_label(self,label):
+        """Writes assembly for label command."""
+        self.lines.append(f"({self.current_function_name}${label})")
+
+    def write_goto(self,label):
+        """Writes assembly for goto command."""
+        self.lines.extend([f"@{self.current_function_name}${label}",
+                               "0;JMP"])
+
+    def write_if(self,label):
+        """Writes assembly for if-goto command."""
+        self._gety() # pops top item from stack and puts in D
+        self.lines.extend([f"@{self.current_function_name}${label}",
+                               "D;JNE"]) # jump only if D != 0
+
+    def write_call(self,function_name: str,num_args: int):
+        """Writes assembly for call command. Must handle
+        setting up the stack and built-ins(LCL,ARG, etc.) 
+        for each routine."""
+        # push return-address (seperately because value in A not M):
+        self.lines.extend([f"@returnaddressfrom.{function_name}","D=A"])
+        self._writeDtostack()
+        
+        # push LCL, ARG, THIS, THAT:
+        to_push = ["@LCL","@ARG","@THIS","@THAT"]
+        for item in to_push:
+            self.lines.extend([item,"D=M"])
+            self._writeDtostack()
+            
+        # ARG = SP-num_args-5:
+        arg_command_list = ["@SP",
+                            "D=M",# value of SP in D
+                            f"@{num_args+5}",
+                            "D=D-A",
+                            "@ARG",
+                            "M=D"] # ARG now set to SP-(num_args+5)
+        self.lines.extend(arg_command_list)
+        
+        # LCL = SP:
+        lcl_command_list = ["@SP",
+                                "D=M", # value of SP in D
+                                "@LCL",
+                                "M=D"] # LCL set to SP value
+        self.lines.extend(lcl_command_list)
+        
+        # goto function_name:
+        self.lines.append(f"@{function_name}")
+        self.lines.append("0;JMP")
+        
+        # label for return address:
+        self.lines.append(f"(returnaddressfrom.{function_name})")
+        
+    def write_return(self):
+        """Writes assembly for call command. Must handle
+        restoring the stack and built-ins(LCL,ARG, etc.) 
+        for the calling(outer) routine."""
+
+        # set LCL address to temp var FRAME: 
+        command_list = ["@LCL",
+                            "D=M", # was D=A                                             **
+                            "@FRAME",
+                            "M=D"] # FRAME is set to address of LCL
+        self.lines.extend(command_list)
+
+        # pop y from stack and place at ARG M
+        self._gety() # return value now in D
+        self.lines.extend(["@ARG",
+                               "A=M",     # added because set value at ARG not set ARG    **
+                               "M=D"])
+
+        # set SP to ARG + 1
+        self.lines.extend(["@ARG",
+                               "D=M+1", # was D=A+1 changed M is address of ARG, A is just 2   **
+                               "@SP",
+                               "M=D"])
+
+        # set THAT to contents of (FRAME-1)
+        self.lines.extend(["@FRAME",
+                               "A=M-1", # A = (FRAME-1)
+                               "D=M", # D = contents of FRAME-1
+                               "@THAT",
+                               "M=D" ]) #THAT = contents of FRAME-1
+
+        # set THIS to contents of (FRAME-2)
+        self.lines.extend(["@FRAME",
+                               "A=M-1", #A = (FRAME-1)
+                               "A=A-1", #A = (FRAME-2)
+                               "D=M", # D = contents of FRAME-1
+                               "@THIS",
+                               "M=D" ]) #THIS = contents of FRAME-2
+
+        # set ARG to contents of (FRAME-3)
+        self.lines.extend(["@FRAME",
+                               "A=M-1", #A = (FRAME-1)
+                               "A=A-1", #A = (FRAME-2)
+                               "A=A-1", #A = (FRAME-3)
+                               "D=M", # D = contents of FRAME-3
+                               "@ARG",
+                               "M=D" ]) #ARG = contents of FRAME-3
+                            
+        # set LCL to contents of (FRAME-4)
+        self.lines.extend(["@FRAME",
+                               "A=M-1", #A = (FRAME-1)
+                               "A=A-1", #A = (FRAME-2)
+                               "A=A-1", #A = (FRAME-3)
+                               "A=A-1", #A = (FRAME-4)
+                               "D=M", # D = contents of FRAME-4
+                               "@LCL",
+                               "M=D" ]) #LCL = contents of FRAME-4
+
+        # set A to contents of (FRAME-5) and jump to it (return address of calling function)
+        self.lines.extend(["@FRAME",
+                               "A=M-1", #A = (FRAME-1)
+                               "A=A-1", #A = (FRAME-2)
+                               "A=A-1", #A = (FRAME-3)
+                               "A=A-1", #A = (FRAME-4)
+                               "A=A-1", #A = (FRAME-5)
+                               "A=M", # D = contents of FRAME-5 = return address
+                               "0;JMP"]) # jump to return address of calling function
+        
+    def write_function(self,function_name: str,num_locals: int):
+        """Writes assembly for the beginning of a new function.
+        Should include function label, etc.."""
+        # save the name (used by write_label,write_if,write_goto):
+        self.current_function_name = function_name 
+        # Add label for beginning of function:
+        self.lines.append(f"({function_name})")
+        # Initialize num_locals number of variables to
+        # stack with value of 0:
+        for i in range(num_locals):
+            self.write_push_pop('push','constant', 0)
+
+    ##################################################################################
+
     def write_arithmetic(self,command: str):
-        """ Take the top one/two things off of the stack,
+        """Take the top one/two things off of the stack,
         place them in A,D,M as appropriate. Perform the 
         selected operation. Then move result from D
-        onto the top of the stack. """
+        onto the top of the stack."""
         # add a comment:
         self.lines.append(f"// write_arithmetic:{command}:")
         match command:
-            #
+            # all cases should put result in D, which is pushed to stack after match statement.
             case 'add':
                 self._getxandy() #A is x and D is y
                 self.lines.append('D=A+D')
@@ -61,6 +217,7 @@ class VMCodeWriter():
         self._writeDtostack()
 
     def write_push_pop(self,command: str, segment: str, index: int):
+        """Write assembly for push and pop commands."""
         # add a comment:
         self.lines.append(f"// write_push_pop:{command} {segment} {index}:")
         # implement push constant x:
@@ -152,11 +309,15 @@ class VMCodeWriter():
         self.lines.extend(command_string)
 
     def close(self):
+        """Writes generated lines to file.
+        Call once when finished with other commands."""
         # write self.lines to self.outfilename.
         with open(self.output_file_name,'w') as outfile:
             outfile.write('\n'.join(self.lines))
         
     def _writeDtostack(self):
+        """Write assembly for pushing contents
+        of D register to stack."""
         command_string = ["//place result(D) into top of stack:",
                               "@SP",
                               "A=M",
@@ -167,8 +328,8 @@ class VMCodeWriter():
         self.lines.extend(command_string)
                               
     def _getxandy(self):
-        """ Uses SP to get x and y from stack and place
-        them in A and D respectively. """
+        """Use SP to get x and y from stack and place
+        them in A and D respectively."""
         command_string = ["//get y put y in D:",
                               "@SP",
                               "A = M",
@@ -184,8 +345,8 @@ class VMCodeWriter():
         self.lines.extend(command_string)
 
     def _gety(self):
-        """ Uses SP to y from stack and place
-        it in D. """
+        """Use SP to get y from stack and place
+        it in D."""
         command_string = ["//get y put y in D:",
                               "@SP",
                               "A = M",
@@ -196,4 +357,5 @@ class VMCodeWriter():
                               "M = M-1",]
         self.lines.extend(command_string)
 
-
+    def write_comment(self, comment_str):
+        self.lines.append(f"//{comment_str}")
