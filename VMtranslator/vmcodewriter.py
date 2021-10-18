@@ -12,6 +12,7 @@ class VMCodeWriter():
         # then implement logic to increment or decrement SP
         self.lines = []
         self.unique = 111
+        self.uniquefunctionreturn = 222 # necessary for recursion or labels won't be unique
         self.output_file_name = output_file_name
         self.current_function_name = ''
 
@@ -29,13 +30,20 @@ class VMCodeWriter():
         command_list = ["@256",
                             "D=A",
                             "@SP",
-                            "M=D", #R0/SP is now 256
-                            "@Sys.init",
-                            "0;JMP" # unconditional jump to sys.init
-                            ]
+                            "M=D"] #R0/SP is now 256
         self.lines.extend(command_list)
+        
+        # call sys.init with setup:
+        self.write_call(function_name='Sys.init', num_args=0)
+        # Answers were misaligned with tests. Spec and tests expect
+        # Sys.init to be called like a regular funtion.
+        # These values were expected on the stack since sys.init never
+        # finishes running. Really though, these shouldn't be necessary since
+        # sys.init never returns to anything. (instead of @Sys.init, 0;JMP)
+
+        
         # do LCL, ARG, THIS, THAT need to be initialized here?
-#       # should follow same stack setup format as write_call()?
+       # should follow same stack setup format as write_call()?
 
     def write_label(self,label):
         """Writes assembly for label command."""
@@ -57,7 +65,7 @@ class VMCodeWriter():
         setting up the stack and built-ins(LCL,ARG, etc.) 
         for each routine."""
         # push return-address (seperately because value in A not M):
-        self.lines.extend([f"@returnaddressfrom.{function_name}","D=A"])
+        self.lines.extend([f"@returnaddressfrom.{function_name}{self.uniquefunctionreturn}","D=A"])
         self._writeDtostack()
         
         # push LCL, ARG, THIS, THAT:
@@ -87,7 +95,11 @@ class VMCodeWriter():
         self.lines.append("0;JMP")
         
         # label for return address:
-        self.lines.append(f"(returnaddressfrom.{function_name})")
+        self.lines.append(f"(returnaddressfrom.{function_name}{self.uniquefunctionreturn})")
+
+        # increment unique pattern for next call
+        # necessary for recursive calls.
+        self.uniquefunctionreturn += 1
         
     def write_return(self):
         """Writes assembly for call command. Must handle
@@ -101,6 +113,21 @@ class VMCodeWriter():
                             "M=D"] # FRAME is set to address of LCL
         self.lines.extend(command_list)
 
+
+        # RET = contents of FRAME-5
+        # Setting RET as temp variable for return-address is necessary,
+        # otherwise replacing ARG later will overwrite return-address
+        # inside the calling function's frame.
+        self.lines.extend(["@FRAME",
+                               "A=M-1", #A = (FRAME-1)
+                               "A=A-1", #A = (FRAME-2)
+                               "A=A-1", #A = (FRAME-3)
+                               "A=A-1", #A = (FRAME-4)
+                               "A=A-1", #A = (FRAME-5)
+                               "D=M", # D = contents of FRAME-5 = return address
+                               "@RET", # variable RET
+                               "M=D"]) # RET = return-address
+        
         # pop y from stack and place at ARG M
         self._gety() # return value now in D
         self.lines.extend(["@ARG",
@@ -148,13 +175,8 @@ class VMCodeWriter():
                                "M=D" ]) #LCL = contents of FRAME-4
 
         # set A to contents of (FRAME-5) and jump to it (return address of calling function)
-        self.lines.extend(["@FRAME",
-                               "A=M-1", #A = (FRAME-1)
-                               "A=A-1", #A = (FRAME-2)
-                               "A=A-1", #A = (FRAME-3)
-                               "A=A-1", #A = (FRAME-4)
-                               "A=A-1", #A = (FRAME-5)
-                               "A=M", # D = contents of FRAME-5 = return address
+        self.lines.extend(["@RET",
+                               "A=M", #A = contents of RET = return-address
                                "0;JMP"]) # jump to return address of calling function
         
     def write_function(self,function_name: str,num_locals: int):
@@ -358,4 +380,5 @@ class VMCodeWriter():
         self.lines.extend(command_string)
 
     def write_comment(self, comment_str):
+        """Place a comment in the output stream file."""
         self.lines.append(f"//{comment_str}")

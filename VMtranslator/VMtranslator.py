@@ -3,8 +3,8 @@
 # Takes a .vm assembly file or folder of same as command line argument and
 # converts it to a .asm file in the same directory, which is
 # written in assembly to run on the HACK Computer(TECS).
-# Will be tested on python 3.10.0
-# first version will only work on one file
+# Tested on python 3.10.0
+
 
 def VMtranslator_main(filename):
     from vmcodewriter import VMCodeWriter
@@ -36,11 +36,14 @@ def VMtranslator_main(filename):
     asm_name = base_name + '.asm'
     writer = VMCodeWriter(asm_name)
     # initialization:
-    #writer.write_init()
+    writer.write_init()
     
     for vmfile in [vfile for vfile in vmfilelist if vfile[-3:] == '.vm']: # will change for multiple files
+        print(f"Coding {vmfile}.")
         parser = VMParser(vmfile) # change to loop over files
-        writer.set_file_name(vmfile[:-3]) # doesn't really do anything yet.may add label later.
+
+        stripped_file_name = os.path.basename(vmfile)[:-3] # get rid of folders,slashes,extensions
+        writer.set_file_name(stripped_file_name) # doesn't really do anything yet.may add label later.
         finished = False
         while finished == False:
             if parser.has_more_commands() == False:
