@@ -1,15 +1,10 @@
 
-from ast import keyword
-
-
 class JackTokenizer:
     def __init__(self, input_file_name): #TODO
         # TODO: handle multiline comments, remove whitespace, iterate over parts.
-        output_file_name = input_file_name[:-5]+'T.xml'
+        output_file_name = input_file_name[:-5]+'_Tmars.xml'
         self.lines = []
         self.tokens_list = [] # [(token_type,token),...] e.g. [('symbol','{'),...]
-        self.current_token = None
-        self.current_token_idx = -1
         # Get lines from file, remove comments, whitespace:
         self.lines = self.__get_stripped_lines__(input_file_name)
         # Check for empty file:
@@ -17,7 +12,9 @@ class JackTokenizer:
             raise ValueError('JACK file is empty')
         # Split lines into tokens here
         self.__tokenize__()
-        self.__generate_output_xml_file__(output_file_name)
+        # first token
+        self.current_token = self.tokens_list[0][1]
+        self.current_token_idx = 0
 
     def has_more_tokens(self) -> bool:
         return len(self.tokens_list) > self.current_token_idx + 1
@@ -38,12 +35,22 @@ class JackTokenizer:
     def identifier(self) -> str:
         return self.current_token
 
-    def int_val(self) -> int: #TODO
+    def int_val(self) -> int:
         current_int = int(self.current_token)
         return current_int
 
-    def string_val(self) -> str: #TODO
+    def string_val(self) -> str:
         return self.current_token
+    
+    def token_to_xml(self) -> str:
+        token_type = self
+        return f'<{self.token_type()}> {self.current_token} </{self.token_type()}>'
+
+    def look_ahead_token(self) -> str:
+        if self.has_more_tokens():
+            next_token = self.tokens_list[self.current_token_idx + 1][1]
+            return next_token
+        return ''
 
     def __tokenize__(self):
         for line in self.lines:
@@ -60,6 +67,10 @@ class JackTokenizer:
                         if current_word:
                             self.tokens_list.append(self.__tokenize_word__(current_word))
                             current_word = []
+                        if not '"' in char_list[idx+1:]:
+                            print('char_list: ', char_list)
+                            print(f'idx: {idx}')
+                            raise SyntaxError('No support for multi-line strings.')
                         closing_idx = char_list.index('"',idx+1)
                         # Don't include quotes in token:
                         StringConstant = ''.join(char_list[idx+1:closing_idx])
@@ -68,7 +79,7 @@ class JackTokenizer:
                     case ('{'|'}'|'('|')'|'['|']'|'.'|
                             ','|';'|'+'|'-'|'*'|'/'|'&'|
                            '|'|'<'|'>'|'='|'~'):
-                        if current_word:
+                        if current_word: # a symbol ends the word
                             self.tokens_list.append(self.__tokenize_word__(current_word))
                             current_word = []
                         match char:
@@ -82,7 +93,7 @@ class JackTokenizer:
                                 symbol = char
                         self.tokens_list.append(('symbol', symbol))
                     case ' ':
-                        if current_word:
+                        if current_word: # ' ' ends the word
                             self.tokens_list.append(self.__tokenize_word__(current_word))
                             current_word = []
                     case _:
@@ -162,6 +173,3 @@ class JackTokenizer:
                 outlines.append(f'<{token_type}> {token_val} </{token_type}>')
             outlines.append('</tokens>')
             outfile.write('\n'.join(outlines))
-
-
-# test = JackTokenizer('/Users/marshall/Desktop/nand2tetris2021/TECS/CompilationEngine/Main.jack')
