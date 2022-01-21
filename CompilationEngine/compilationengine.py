@@ -1,10 +1,11 @@
 
 class CompilationEngine:
-    def __init__(self, tokenizer, output_line_list):
+    def __init__(self, tokenizer, vmwriter, output_line_list):
         from symboltable import SymbolTable
         self.symbol_table = SymbolTable()
         self.tokenizer = tokenizer
         self.output_list = output_line_list
+        self.vmwriter = vmwriter
 
     def compile_class(self):
         self.output_list.append('<class>')
@@ -12,9 +13,9 @@ class CompilationEngine:
         self.output_list.append(self.tokenizer.token_to_xml())
         self.tokenizer.advance()
         # identifier (class name)
-        class_name = self.tokenizer.current_token
+        self.class_name = self.tokenizer.current_token
         self.output_list.append(self.tokenizer.token_to_xml())
-        xml_string = f'<IDuse> define class {class_name} </IDuse>'
+        xml_string = f'<IDuse> define class {self.class_name} </IDuse>'
         self.output_list.append(xml_string)
         self.tokenizer.advance()
         # '{'
@@ -93,6 +94,7 @@ class CompilationEngine:
         # ')'
         outlist.append(self.tokenizer.token_to_xml())
         self.tokenizer.advance()
+
         # compile subroutine body
         outlist.append('<subroutineBody>')
         # '{'
@@ -102,6 +104,9 @@ class CompilationEngine:
             # varDec*
             while self.tokenizer.current_token == 'var':
                 self.compile_var_dec()
+            # Write vm code for function definition
+            number_of_arguments = self.symbol_table.var_count('arg')
+            self.vmwriter.function(f'{self.class_name}.{subroutine_name}', number_of_arguments)
             # Statements:
             self.compile_statements()
         # }
@@ -184,13 +189,14 @@ class CompilationEngine:
     def compile_do(self):
         outlist = self.output_list
         outlist.append('<doStatement>')
+        no_class_specified = True
         while self.tokenizer.current_token != ';':
             if self.tokenizer.current_token == '(':
                 # (
                 self.output_list.append(self.tokenizer.token_to_xml())
                 self.tokenizer.advance()
                 # expression
-                self.compile_expression_list()
+                nargs = self.compile_expression_list()
                 # )
                 self.output_list.append(self.tokenizer.token_to_xml())
                 self.tokenizer.advance()
@@ -205,19 +211,30 @@ class CompilationEngine:
                         var_index = self.symbol_table.index_of(var_name)
                         var_type = self.symbol_table.type_of(var_name)
                         xml_string = f'<IDuse> use {var_kind} {var_type} {var_name} idx: {var_index} </IDuse>'
-                        outlist.append(xml_string)    
+                        outlist.append(xml_string)
+                        specified_class = var_name    
+                        no_class_specified = False
                     # else check if next is . implies class
                     elif self.tokenizer.look_ahead_token() == '.':
                         if var_kind == 'NONE':
                             # otherwise var_name is a variable which is instance of some class
                             xml_string = f'<IDuse> use class {var_name} </IDuse>'
                             outlist.append(xml_string)
+                            specified_class = var_name 
+                            no_class_specified = False
                     # check if next is () implies subroutine
                     elif self.tokenizer.look_ahead_token() == '(':
                         subroutine_name = self.tokenizer.current_token
                         xml_string = f'<IDuse> use subroutine {subroutine_name} </IDuse>'
                         outlist.append(xml_string)
                 self.tokenizer.advance()
+        # add vm code for routine call:
+        if no_class_specified:
+            self.vmwriter.call(f'{self.class_name}.{subroutine_name}', nargs) 
+        else:
+            self.vmwriter.call(f'{specified_class}.{subroutine_name}', nargs)
+
+
         # one more for ';'
         self.output_list.append(self.tokenizer.token_to_xml())
         self.tokenizer.advance()
@@ -288,8 +305,15 @@ class CompilationEngine:
         # 'return' keyword
         self.output_list.append(self.tokenizer.token_to_xml())
         self.tokenizer.advance()
+        if self.tokenizer.current_token == ';':
+            is_void_function = True
         while self.tokenizer.current_token != ';':
             self.compile_expression()
+        if is_void_function:
+            # void functions must push 0 onto stack before returning
+            # calls to void functions will throw away the value after return
+            self.vmwriter.push('constant', 0)
+        self.vmwriter.ret()
         # one more for ';'
         self.output_list.append(self.tokenizer.token_to_xml())
         self.tokenizer.advance()
@@ -346,19 +370,34 @@ class CompilationEngine:
             self.compile_term()
         # if next is op, more term
         ops = {'+','-','*','/','&amp;','|','&lt;','&gt;','='}
+        builtin_ops = {'+':'add','-':'neg','&amp;':'and','|':'or','&lt;':'lt','&gt;':'gt','=':'eq'}
+
         while self.tokenizer.current_token in ops:
             # op
+            op = self.tokenizer.current_token
             self.output_list.append(self.tokenizer.token_to_xml())
             self.tokenizer.advance()
             # term
             self.compile_term()
+            # TODO VM cod for op?
+            if op in builtin_ops:
+                self.vmwriter.arithmetic(builtin_ops[op])
+            elif op == '*':
+                self.vmwriter.call('Math.multiply', 2)
+            elif op == '/':
+                self.vmwriter.call('Math.divide', 2)
         outlist.append('</expression>')
 
     def compile_term(self):
         outlist = self.output_list
         outlist.append('<term>')
         match self.tokenizer.token_type():
-            case ('integerConstant' | 'stringConstant' | 'keyword'):
+            case 'integerConstant':
+                integer = self.tokenizer.current_token
+                self.vmwriter.push('constant', integer)
+                self.output_list.append(self.tokenizer.token_to_xml())
+                self.tokenizer.advance()
+            case ('stringConstant' | 'keyword'):
                 self.output_list.append(self.tokenizer.token_to_xml())
                 self.tokenizer.advance()
             case 'identifier':
@@ -397,6 +436,7 @@ class CompilationEngine:
                     # ')'
                     self.output_list.append(self.tokenizer.token_to_xml())
                     self.tokenizer.advance()
+                    # TODO add vm code for subroutine. remember to add class name.subroutine
                 elif self.tokenizer.current_token == '.':
                     # previous was class:
                     if var_kind == 'NONE':
@@ -416,10 +456,11 @@ class CompilationEngine:
                     self.output_list.append(self.tokenizer.token_to_xml())
                     self.tokenizer.advance()  
                     # expression list
-                    self.compile_expression_list()
+                    nargs = self.compile_expression_list()
                     # ')'
                     self.output_list.append(self.tokenizer.token_to_xml())
                     self.tokenizer.advance()
+                    self.vmwriter.call(f'{var_name}.{subroutine_name}', nargs)
 
             case 'symbol':
                 match self.tokenizer.current_token:
@@ -446,12 +487,16 @@ class CompilationEngine:
         outlist.append('</term>')
 
     def compile_expression_list(self):
+        nargs = 0
         outlist = self.output_list
         outlist.append('<expressionList>')
         if self.tokenizer.current_token != ')':
             self.compile_expression()
+            nargs += 1
         while self.tokenizer.current_token == ',':
             self.output_list.append(self.tokenizer.token_to_xml())
             self.tokenizer.advance()
             self.compile_expression()
+            nargs += 1
         outlist.append('</expressionList>')
+        return nargs

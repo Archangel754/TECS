@@ -4,14 +4,10 @@
 # converts it to .xml files in the same directory.
 # Tested on python 3.10.0
 
-
-from lib2to3.pgen2 import token
-from tokenize import Token
-
-
 def jack_analyzer_main(filename):
     from jacktokenizer import JackTokenizer
     from compilationengine import CompilationEngine
+    from vmwriter import VMWriter
     import os
     #handle directory or .vm file
     if os.path.isdir(filename):
@@ -36,7 +32,10 @@ def jack_analyzer_main(filename):
         print(f"Coding {jackfile}.")
         output_line_list = []
         tokenizer = JackTokenizer(jackfile)
-        compilation_engine = CompilationEngine(tokenizer,output_line_list)
+        vmwriter = VMWriter()
+        #for item in tokenizer.tokens_list:
+        #    print(item)
+        compilation_engine = CompilationEngine(tokenizer, vmwriter, output_line_list)
         # generate output_line_list
         if tokenizer.current_token == 'class':
             compilation_engine.compile_class()
@@ -45,11 +44,19 @@ def jack_analyzer_main(filename):
         # Generate output name
         stripped_file_name = os.path.basename(jackfile)[:-5] # get rid of folders,slashes,extensions
         output_file_name = stripped_file_name + 'm.xml'
+        output_vm_file_name = jackfile[:-5] + '.vm'
         
-        # Write ouput file
-        with open(output_file_name,'w') as outfile:
-            outfile.write('\n'.join(output_line_list))
+        # print vm code
+        vmwriter.print_vm_code()
 
+        # Write output xml file
+        #with open(output_file_name,'w') as outfile:
+        #    outfile.write('\n'.join(output_line_list))
+
+        # Write output vm file
+        output_vm_list = vmwriter.get_output_list()
+        with open(output_vm_file_name,'w') as outfile:
+            outfile.write('\n'.join(output_vm_list))
 
 
 
