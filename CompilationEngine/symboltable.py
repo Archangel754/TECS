@@ -3,27 +3,27 @@ class SymbolTable:
     """Provides access to class and subroutine scope symbol tables."""
     def __init__(self) -> None:
         """Creates a new empty symbol table."""
-        # example: table = {symbolname:{'type':'int',kind:'STATIC','index':0}}
+        # example: table = {symbolname:{'type':'int',kind:'static','index':0}}
         self.class_table = {}
         self.subroutine_table = {}
-        self.__class_next_index__ = {'STATIC':0,'FIELD':0}
-        self.__subroutine_next_index__ = {'ARG':0,'VAR':0}
+        self.__class_next_index__ = {'static':0,'field':0}
+        self.__subroutine_next_index__ = {'arg':0,'var':0}
 
     def start_subroutine(self):
         """Start a new subroutine scope(reset subroutine symbol table)."""
         self.subroutine_table = {}
-        self.__subroutine_next_index__ = {'ARG':0,'VAR':0}
+        self.__subroutine_next_index__ = {'arg':0,'var':0}
 
     def define(self, name, type, kind):
         """Define a new identifier, assign it running index."""
-        # STATIC, FIELD identifiers -> class scope
-        # ARG, VAR identifiers -> subroutine scope
+        # static, field identifiers -> class scope
+        # arg, var identifiers -> subroutine scope
         match kind:
-            case ('STATIC' | 'FIELD'):
+            case ('static' | 'field'):
                 index = self.__class_next_index__[kind]
                 self.class_table[name] = {'type':type,'kind':kind,'index':index}
                 self.__class_next_index__[kind] += 1
-            case ('ARG' | 'VAR'):
+            case ('arg' | 'var'):
                 index = self.__subroutine_next_index__[kind]
                 self.subroutine_table[name] = {'type':type,'kind':kind,'index':index}
                 self.__subroutine_next_index__[kind] += 1
@@ -31,9 +31,9 @@ class SymbolTable:
     def var_count(self, kind) -> int:
         """Return number of variabled of kind already defined in current scope."""
         match kind:
-            case ('STATIC' | 'FIELD'):
+            case ('static' | 'field'):
                 table = self.class_table
-            case ('ARG' | 'VAR'):
+            case ('arg' | 'var'):
                 table = self.subroutine_table
         count = 0
         for symbol_name in table:

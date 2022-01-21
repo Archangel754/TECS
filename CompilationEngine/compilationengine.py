@@ -1,14 +1,25 @@
 
 class CompilationEngine:
     def __init__(self, tokenizer, output_line_list):
+        from symboltable import SymbolTable
+        self.symbol_table = SymbolTable()
         self.tokenizer = tokenizer
         self.output_list = output_line_list
 
     def compile_class(self):
         self.output_list.append('<class>')
-        for i in range(3): # class keyword, class identifier, '{'
-            self.output_list.append(self.tokenizer.token_to_xml())
-            self.tokenizer.advance()
+        # class keyword
+        self.output_list.append(self.tokenizer.token_to_xml())
+        self.tokenizer.advance()
+        # identifier (class name)
+        class_name = self.tokenizer.current_token
+        self.output_list.append(self.tokenizer.token_to_xml())
+        xml_string = f'<IDuse> define class {class_name} </IDuse>'
+        self.output_list.append(xml_string)
+        self.tokenizer.advance()
+        # '{'
+        self.output_list.append(self.tokenizer.token_to_xml())
+        self.tokenizer.advance()
         finished = False
         while not finished:
             if self.tokenizer.has_more_tokens() == False:
@@ -29,8 +40,29 @@ class CompilationEngine:
     def compile_class_var_dec(self):
         outlist = self.output_list
         outlist.append('<classVarDec>')
+        var_kind, var_name, var_type = None, None, None
+        if self.tokenizer.current_token != ';':
+            # current token is var kind (static or field)
+            var_kind = self.tokenizer.current_token
+            var_type = self.tokenizer.look_ahead_token()
+            # add kind to output:
+            outlist.append(self.tokenizer.token_to_xml())
+            self.tokenizer.advance()
+            # type to output:
+            outlist.append(self.tokenizer.token_to_xml())
+            self.tokenizer.advance()
         while self.tokenizer.current_token != ';':
             outlist.append(self.tokenizer.token_to_xml())
+            # symbol table entry:
+            if self.tokenizer.current_token not in [',',';']:
+                # token is name of variable to declare: add to table          
+                var_name = self.tokenizer.current_token
+                print(f'Adding {var_name,var_type,var_kind} to symbol table:')
+                self.symbol_table.define(var_name,var_type,var_kind)
+                var_index = self.symbol_table.index_of(var_name)
+                xml_string = f'<STentry> define {var_kind} {var_type} {var_name} idx: {var_index} </STentry>'
+                outlist.append(xml_string)
+            # XML:
             self.tokenizer.advance()
         # add ';':
         outlist.append(self.tokenizer.token_to_xml())
@@ -39,13 +71,23 @@ class CompilationEngine:
 
     def compile_subroutine(self):
         outlist = self.output_list
+        self.symbol_table.start_subroutine()
         outlist.append('<subroutineDec>')
-        # compile subroutine type, return type, name, '('
-        for i in range(4):
+        # compile subroutine type, return type
+        for i in range(2):
             #if i == 2:
                 # print(f'Compiling subroutine: {self.tokenizer.current_token}')
             outlist.append(self.tokenizer.token_to_xml())
             self.tokenizer.advance()
+        # compile name
+        subroutine_name = self.tokenizer.current_token
+        outlist.append(self.tokenizer.token_to_xml())
+        xml_string = f'<IDuse> define subroutine {subroutine_name} </IDuse>'
+        outlist.append(xml_string)
+        self.tokenizer.advance()
+        # compile '('
+        outlist.append(self.tokenizer.token_to_xml())
+        self.tokenizer.advance()
         # compile parameter list
         self.compile_parameter_list()
         # ')'
@@ -71,7 +113,23 @@ class CompilationEngine:
     def compile_parameter_list(self):
         outlist = self.output_list
         outlist.append('<parameterList>')
+        var_kind = 'arg'
+        var_name, var_type = None, None
         while self.tokenizer.current_token != ')':
+            # symbol table entry:
+            if self.tokenizer.current_token != ',':
+                if var_type == None:
+                    var_type = self.tokenizer.current_token
+                else:
+                    var_name = self.tokenizer.current_token
+                    print(f'Adding {var_name,var_type,var_kind} to symbol table:')
+                    self.symbol_table.define(var_name,var_type,var_kind)
+                    var_index = self.symbol_table.index_of(var_name)
+                    xml_string = f'<STentry> define {var_kind} {var_type} {var_name} idx: {var_index} </STentry>'
+                    outlist.append(xml_string)
+                    var_type, var_name = None, None
+
+            # xml:
             outlist.append(self.tokenizer.token_to_xml())
             self.tokenizer.advance()
         outlist.append('</parameterList>')
@@ -79,8 +137,27 @@ class CompilationEngine:
     def compile_var_dec(self):
         outlist = self.output_list
         outlist.append('<varDec>')
+        var_kind = 'var'
+        var_type, var_name = None, None
+        # var kind:
+        self.output_list.append(self.tokenizer.token_to_xml())
+        self.tokenizer.advance()
+        # var type:
+        var_type = self.tokenizer.current_token
+        self.output_list.append(self.tokenizer.token_to_xml())
+        self.tokenizer.advance()
         while self.tokenizer.current_token != ';':
+            # xml:
             self.output_list.append(self.tokenizer.token_to_xml())
+            # symbol table entry:
+            if self.tokenizer.current_token not in [',',';']:
+                # token is name of variable to declare: add to table          
+                var_name = self.tokenizer.current_token
+                print(f'Adding {var_name,var_type,var_kind} to symbol table:')
+                self.symbol_table.define(var_name,var_type,var_kind)
+                var_index = self.symbol_table.index_of(var_name)
+                xml_string = f'<STentry> define {var_kind} {var_type} {var_name} idx: {var_index} </STentry>'
+                outlist.append(xml_string)
             self.tokenizer.advance()
         # one more for ';'
         self.output_list.append(self.tokenizer.token_to_xml())
@@ -118,7 +195,28 @@ class CompilationEngine:
                 self.output_list.append(self.tokenizer.token_to_xml())
                 self.tokenizer.advance()
             else:
-                self.output_list.append(self.tokenizer.token_to_xml())
+                token_type = self.tokenizer.token_type()
+                self.output_list.append(self.tokenizer.token_to_xml()) 
+                if token_type == 'identifier':
+                    # check if variable in table
+                    var_name = self.tokenizer.current_token
+                    var_kind = self.symbol_table.kind_of(var_name)
+                    if var_kind != 'NONE':
+                        var_index = self.symbol_table.index_of(var_name)
+                        var_type = self.symbol_table.type_of(var_name)
+                        xml_string = f'<IDuse> use {var_kind} {var_type} {var_name} idx: {var_index} </IDuse>'
+                        outlist.append(xml_string)    
+                    # else check if next is . implies class
+                    elif self.tokenizer.look_ahead_token() == '.':
+                        if var_kind == 'NONE':
+                            # otherwise var_name is a variable which is instance of some class
+                            xml_string = f'<IDuse> use class {var_name} </IDuse>'
+                            outlist.append(xml_string)
+                    # check if next is () implies subroutine
+                    elif self.tokenizer.look_ahead_token() == '(':
+                        subroutine_name = self.tokenizer.current_token
+                        xml_string = f'<IDuse> use subroutine {subroutine_name} </IDuse>'
+                        outlist.append(xml_string)
                 self.tokenizer.advance()
         # one more for ';'
         self.output_list.append(self.tokenizer.token_to_xml())
@@ -133,8 +231,18 @@ class CompilationEngine:
         self.tokenizer.advance()
         # varName or varName[expression]:
         # varName
+        var_name = self.tokenizer.current_token
         self.output_list.append(self.tokenizer.token_to_xml())
         self.tokenizer.advance()
+        # do IDuse xml:
+        var_kind = self.symbol_table.kind_of(var_name)
+        if var_kind == 'NONE':
+            raise SyntaxError(f'{var_name} invoked in let before declaration.')
+        else:
+            var_type = self.symbol_table.type_of(var_name)
+            var_index = self.symbol_table.index_of(var_name)
+            xml_string = f'<IDuse> use {var_kind} {var_type} {var_name} idx: {var_index} </IDuse>'
+            outlist.append(xml_string)
         if self.tokenizer.current_token == '[':
             # '['
             self.output_list.append(self.tokenizer.token_to_xml())
@@ -255,9 +363,17 @@ class CompilationEngine:
                 self.tokenizer.advance()
             case 'identifier':
                 # handle varName | varName '[' expression ']' | subroutineName
-                # identifier:
+                # identifier 'name':
+                var_name = self.tokenizer.current_token
+                var_kind = self.symbol_table.kind_of(var_name)
                 self.output_list.append(self.tokenizer.token_to_xml())
                 self.tokenizer.advance()
+                if var_kind != 'NONE':
+                    category = var_kind
+                    var_index = self.symbol_table.index_of(var_name)
+                    var_type = self.symbol_table.type_of(var_name)
+                    xml_string = f'<IDuse> use {var_kind} {var_type} {var_name} idx: {var_index} </IDuse>'
+                    outlist.append(xml_string)      
                 # if next symbol is (, [, or ., then it's a subroutineCall
                 # array or array
                 if self.tokenizer.current_token == '[':
@@ -270,6 +386,9 @@ class CompilationEngine:
                     self.output_list.append(self.tokenizer.token_to_xml())
                     self.tokenizer.advance()
                 elif self.tokenizer.current_token == '(':
+                    subroutine_name = self.tokenizer.current_token
+                    xml_string = f'<IDuse> use subroutine {subroutine_name} </IDuse>'
+                    outlist.append(xml_string)
                     # '('
                     self.output_list.append(self.tokenizer.token_to_xml())
                     self.tokenizer.advance()
@@ -279,10 +398,23 @@ class CompilationEngine:
                     self.output_list.append(self.tokenizer.token_to_xml())
                     self.tokenizer.advance()
                 elif self.tokenizer.current_token == '.':
-                    # '.' , subroutine name , '('
-                    for _ in range(3):
-                        self.output_list.append(self.tokenizer.token_to_xml())
-                        self.tokenizer.advance()  
+                    # previous was class:
+                    if var_kind == 'NONE':
+                        # otherwise var_name is a variable which is instance of some class
+                        xml_string = f'<IDuse> use class {var_name} </IDuse>'
+                        outlist.append(xml_string)
+                    # '.'
+                    self.output_list.append(self.tokenizer.token_to_xml())
+                    self.tokenizer.advance()  
+                    # subroutine name
+                    subroutine_name = self.tokenizer.current_token
+                    self.output_list.append(self.tokenizer.token_to_xml())
+                    self.tokenizer.advance()  
+                    xml_string = f'<IDuse> use subroutine {subroutine_name} </IDuse>'
+                    outlist.append(xml_string)
+                    # (
+                    self.output_list.append(self.tokenizer.token_to_xml())
+                    self.tokenizer.advance()  
                     # expression list
                     self.compile_expression_list()
                     # ')'
