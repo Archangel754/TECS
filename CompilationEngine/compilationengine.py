@@ -1,4 +1,7 @@
 
+from ast import keyword
+
+
 class CompilationEngine:
     def __init__(self, tokenizer, vmwriter, output_line_list):
         from symboltable import SymbolTable
@@ -6,6 +9,7 @@ class CompilationEngine:
         self.tokenizer = tokenizer
         self.output_list = output_line_list
         self.vmwriter = vmwriter
+        self.label_count = 0
 
     def compile_class(self):
         self.output_list.append('<class>')
@@ -105,8 +109,8 @@ class CompilationEngine:
             while self.tokenizer.current_token == 'var':
                 self.compile_var_dec()
             # Write vm code for function definition
-            number_of_arguments = self.symbol_table.var_count('arg')
-            self.vmwriter.function(f'{self.class_name}.{subroutine_name}', number_of_arguments)
+            number_of_locals = self.symbol_table.var_count('var')
+            self.vmwriter.function(f'{self.class_name}.{subroutine_name}', number_of_locals)
             # Statements:
             self.compile_statements()
         # }
@@ -278,16 +282,25 @@ class CompilationEngine:
         self.output_list.append(self.tokenizer.token_to_xml())
         self.tokenizer.advance()
         outlist.append('</letStatement>')
+        # vm code for setting variable value
+        self.vmwriter.pop(var_kind, var_index)
 
     def compile_while(self):
         outlist = self.output_list
         outlist.append('<whileStatement>')
+        label_number = self.label_count
+        self.label_count += 1
         # <while>, '('
         for _ in range(2):
             self.output_list.append(self.tokenizer.token_to_xml())
             self.tokenizer.advance()
         # expressions:
+        # WHILE_COND
+        self.vmwriter.label(f'WHILE_BEG{label_number}')
         self.compile_expression()
+        # IF not WHILE_COND true goto WHILE_END
+        self.vmwriter.arithmetic('not')
+        self.vmwriter.if_goto(f'WHILE_END{label_number}')
         # ')' , '{' :
         for _ in range(2):
             self.output_list.append(self.tokenizer.token_to_xml())
@@ -295,6 +308,9 @@ class CompilationEngine:
         # statements:
         self.compile_statements()
         # '}'
+        # goto beginning of while condition
+        self.vmwriter.goto(f'WHILE_BEG{label_number}')
+        self.vmwriter.label(f'WHILE_END{label_number}')
         self.output_list.append(self.tokenizer.token_to_xml())
         self.tokenizer.advance()
         outlist.append('</whileStatement>')
@@ -305,8 +321,7 @@ class CompilationEngine:
         # 'return' keyword
         self.output_list.append(self.tokenizer.token_to_xml())
         self.tokenizer.advance()
-        if self.tokenizer.current_token == ';':
-            is_void_function = True
+        is_void_function = self.tokenizer.current_token == ';'
         while self.tokenizer.current_token != ';':
             self.compile_expression()
         if is_void_function:
@@ -321,6 +336,8 @@ class CompilationEngine:
 
     def compile_if(self):
         outlist = self.output_list
+        label_number = self.label_count
+        self.label_count += 1
         outlist.append('<ifStatement>')
         # 'if' , '('
         for _ in range(2):
@@ -328,6 +345,9 @@ class CompilationEngine:
             self.tokenizer.advance()
         # expression:
         self.compile_expression()
+        # if if condition not true, goto else
+        self.vmwriter.arithmetic('not')
+        self.vmwriter.if_goto(f'IF_ELSE{label_number}')
         # ')', '{' 
         for _ in range(2):
             self.output_list.append(self.tokenizer.token_to_xml())
@@ -335,9 +355,13 @@ class CompilationEngine:
         # statements:
         self.compile_statements()
         # one more for '}'
+        # VM goto end of else
+        self.vmwriter.goto(f'IF_ELSE_END{label_number}')
         self.output_list.append(self.tokenizer.token_to_xml())
         self.tokenizer.advance()
         # handle if there is an else:
+        # end of if statements, beginning of else or rest of code
+        self.vmwriter.label(f'IF_ELSE{label_number}')
         if self.tokenizer.current_token == 'else':
             # else, {
             for _ in range(2):
@@ -348,6 +372,7 @@ class CompilationEngine:
             # }
             self.output_list.append(self.tokenizer.token_to_xml())
             self.tokenizer.advance()
+        self.vmwriter.label(f'IF_ELSE_END{label_number}')
         outlist.append('</ifStatement>')
 
     def compile_expression(self): 
@@ -379,7 +404,7 @@ class CompilationEngine:
             self.tokenizer.advance()
             # term
             self.compile_term()
-            # TODO VM cod for op?
+            # VM cod for op
             if op in builtin_ops:
                 self.vmwriter.arithmetic(builtin_ops[op])
             elif op == '*':
@@ -397,9 +422,20 @@ class CompilationEngine:
                 self.vmwriter.push('constant', integer)
                 self.output_list.append(self.tokenizer.token_to_xml())
                 self.tokenizer.advance()
-            case ('stringConstant' | 'keyword'):
+            case 'keyword':
+                keyword = self.tokenizer.current_token
+                match keyword:
+                    case 'true':
+                        self.vmwriter.push('constant', 1)
+                        self.vmwriter.arithmetic('neg')
+                    case ('false' | 'null'):
+                        self.vmwriter.push('constant', 0)
                 self.output_list.append(self.tokenizer.token_to_xml())
                 self.tokenizer.advance()
+            case 'stringConstant':
+                self.output_list.append(self.tokenizer.token_to_xml())
+                self.tokenizer.advance()
+                
             case 'identifier':
                 # handle varName | varName '[' expression ']' | subroutineName
                 # identifier 'name':
@@ -461,16 +497,24 @@ class CompilationEngine:
                     self.output_list.append(self.tokenizer.token_to_xml())
                     self.tokenizer.advance()
                     self.vmwriter.call(f'{var_name}.{subroutine_name}', nargs)
+                else: 
+                    # reference to variable, need to put on stack
+                    self.vmwriter.push(var_kind, var_index)
 
             case 'symbol':
                 match self.tokenizer.current_token:
                     # unaryOp and term
-                    case ('-' | '~'):
+                    case ('-' | '~') as op:
+                        if op == '-':
+                            op_instruction = 'neg'
+                        else: # ~
+                            op_instruction = 'not'
                         # unaryOp
                         self.output_list.append(self.tokenizer.token_to_xml())
                         self.tokenizer.advance() 
                         # term
                         self.compile_term()
+                        self.vmwriter.arithmetic(op_instruction)
                             
                     # (expression)
                     case '(':
