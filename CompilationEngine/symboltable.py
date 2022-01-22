@@ -27,6 +27,8 @@ class SymbolTable:
                 index = self.__subroutine_next_index__[kind]
                 self.subroutine_table[name] = {'type':type,'kind':kind,'index':index}
                 self.__subroutine_next_index__[kind] += 1
+            case _:
+                raise ValueError(f"Can't define symbol with kind {kind}.")
 
     def var_count(self, kind) -> int:
         """Return number of variabled of kind already defined in current scope."""
