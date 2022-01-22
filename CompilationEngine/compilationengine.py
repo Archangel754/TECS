@@ -1,5 +1,6 @@
 
 from ast import keyword
+from readline import parse_and_bind
 
 
 class CompilationEngine:
@@ -79,6 +80,8 @@ class CompilationEngine:
         self.symbol_table.start_subroutine()
         outlist.append('<subroutineDec>')
         # compile subroutine type, return type
+        # routine_type: function(subroutine), constructor, or method
+        routine_type = self.tokenizer.current_token
         for i in range(2):
             #if i == 2:
                 # print(f'Compiling subroutine: {self.tokenizer.current_token}')
@@ -109,8 +112,30 @@ class CompilationEngine:
             while self.tokenizer.current_token == 'var':
                 self.compile_var_dec()
             # Write vm code for function definition
-            number_of_locals = self.symbol_table.var_count('var')
-            self.vmwriter.function(f'{self.class_name}.{subroutine_name}', number_of_locals)
+            match routine_type:
+                case 'function':
+                    # vm code for function def
+                    number_of_locals = self.symbol_table.var_count('var')
+                    self.vmwriter.function(f'{self.class_name}.{subroutine_name}', number_of_locals)
+                case 'method':
+                    # set base of this segment
+                    # vm code for function def
+                    number_of_locals = self.symbol_table.var_count('var')
+                    self.vmwriter.function(f'{self.class_name}.{subroutine_name}', number_of_locals)
+                    # put base of this object in pointer 0: this
+                    self.vmwriter.push('arg', 0)
+                    self.vmwriter.pop('pointer', 0)
+                case 'constructor':
+                    # vm code for function def
+                    number_of_locals = self.symbol_table.var_count('var')
+                    self.vmwriter.function(f'{self.class_name}.{subroutine_name}', number_of_locals)
+                    # allocate memory block for new object
+                    size_of_object = self.symbol_table.var_count('field')
+                    self.vmwriter.push('constant', size_of_object)
+                    self.vmwriter.call('Memory.alloc', 1)
+                    # set base of this segment (pointer 0) to point at base of object
+                    self.vmwriter.pop('pointer', 0)
+                    
             # Statements:
             self.compile_statements()
         # }
@@ -194,13 +219,14 @@ class CompilationEngine:
         outlist = self.output_list
         outlist.append('<doStatement>')
         no_class_specified = True
+        nargs = 0
         while self.tokenizer.current_token != ';':
             if self.tokenizer.current_token == '(':
                 # (
                 self.output_list.append(self.tokenizer.token_to_xml())
                 self.tokenizer.advance()
                 # expression
-                nargs = self.compile_expression_list()
+                nargs += self.compile_expression_list()
                 # )
                 self.output_list.append(self.tokenizer.token_to_xml())
                 self.tokenizer.advance()
@@ -226,19 +252,34 @@ class CompilationEngine:
                             outlist.append(xml_string)
                             specified_class = var_name 
                             no_class_specified = False
+                        
                     # check if next is () implies subroutine
                     elif self.tokenizer.look_ahead_token() == '(':
                         subroutine_name = self.tokenizer.current_token
                         xml_string = f'<IDuse> use subroutine {subroutine_name} </IDuse>'
                         outlist.append(xml_string)
+                    if var_kind != 'NONE' and self.tokenizer.look_ahead_token() == '.':
+                        # var_kind is an object, and this is a method call
+                        # push reference to object onto stack before arguments
+                        # push var_kind var_index
+                        self.vmwriter.push(var_kind, var_index)
+                        nargs += 1
+                        #self.symbol_table.define('this', var_type, 'arg')
+                        # class name for function call
+                        specified_class = self.symbol_table.type_of(var_name)   
                 self.tokenizer.advance()
         # add vm code for routine call:
         if no_class_specified:
+            # This is a call to method. functions and constructors must be
+            # called using their full names. See page 189.
+            self.vmwriter.push('pointer', 0)
+            nargs += 1
             self.vmwriter.call(f'{self.class_name}.{subroutine_name}', nargs) 
         else:
             self.vmwriter.call(f'{specified_class}.{subroutine_name}', nargs)
-
-
+        # do always ignores return value (assumes void method or function)
+        # pop and ignore the returned value (constant 0)
+        self.vmwriter.pop('temp', 0)
         # one more for ';'
         self.output_list.append(self.tokenizer.token_to_xml())
         self.tokenizer.advance()
@@ -405,7 +446,12 @@ class CompilationEngine:
             # term
             self.compile_term()
             # VM cod for op
-            if op in builtin_ops:
+            if op == '-':
+                # 'neg' makes second term negative, but if part of
+                # expression the two terms still must be added together.
+                self.vmwriter.arithmetic('neg')
+                self.vmwriter.arithmetic('add')
+            elif op in builtin_ops:
                 self.vmwriter.arithmetic(builtin_ops[op])
             elif op == '*':
                 self.vmwriter.call('Math.multiply', 2)
@@ -430,6 +476,8 @@ class CompilationEngine:
                         self.vmwriter.arithmetic('neg')
                     case ('false' | 'null'):
                         self.vmwriter.push('constant', 0)
+                    case 'this':
+                        self.vmwriter.push('pointer', 0)
                 self.output_list.append(self.tokenizer.token_to_xml())
                 self.tokenizer.advance()
             case 'stringConstant':
@@ -472,7 +520,6 @@ class CompilationEngine:
                     # ')'
                     self.output_list.append(self.tokenizer.token_to_xml())
                     self.tokenizer.advance()
-                    # TODO add vm code for subroutine. remember to add class name.subroutine
                 elif self.tokenizer.current_token == '.':
                     # previous was class:
                     if var_kind == 'NONE':
