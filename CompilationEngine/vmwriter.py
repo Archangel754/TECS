@@ -10,6 +10,8 @@ class VMWriter:
             segment = 'local'
         if segment == 'arg':
             segment = 'argument'
+        if segment == 'field':
+            segment = 'this'
         self.output_list.append(f'push {segment} {idx}')
 
     def pop(self, segment,idx):
@@ -18,6 +20,8 @@ class VMWriter:
             segment = 'local'
         if segment == 'arg':
             segment = 'argument'
+        if segment == 'field':
+            segment = 'this'
         self.output_list.append(f'pop {segment} {idx}')
 
     def arithmetic(self, command):
