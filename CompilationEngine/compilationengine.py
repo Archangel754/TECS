@@ -483,7 +483,18 @@ class CompilationEngine:
             case 'stringConstant':
                 self.output_list.append(self.tokenizer.token_to_xml())
                 self.tokenizer.advance()
-                
+                # use String.new(length) and String.appendChar(nextChar) to 
+                # generate new string object and then push to stack
+                string = self.tokenizer.current_token
+                length = len(string)
+                self.vmwriter.push('constant', length)
+                # nargs is 1 (String.new is constructor)
+                self.vmwriter.call('String.new', 1)
+                for char in string:
+                    self.vmwriter.push('constant', char)
+                    # nargs is 2 because appendChar is a method
+                    # string reference is already on stack
+                    self.vmwriter.call('String.appendChar', 2)     
             case 'identifier':
                 # handle varName | varName '[' expression ']' | subroutineName
                 # identifier 'name':
