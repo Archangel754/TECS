@@ -1,6 +1,8 @@
 
 class CompilationEngine:
+    """Recursive descent parser for JACK language to VM code."""
     def __init__(self, tokenizer, vmwriter, output_line_list):
+        """Initializes the variables needed to compile JACK code."""
         from symboltable import SymbolTable
         self.symbol_table = SymbolTable()
         self.tokenizer = tokenizer
@@ -9,6 +11,7 @@ class CompilationEngine:
         self.label_count = 0
 
     def compile_class(self):
+        """Compiles a complete JACK class (one .jack file)."""
         self.output_list.append('<class>')
         # class keyword
         self.output_list.append(self.tokenizer.token_to_xml())
@@ -40,6 +43,7 @@ class CompilationEngine:
         self.output_list.append('</class>')
 
     def compile_class_var_dec(self):
+        """Compiles a static or field declaration."""
         outlist = self.output_list
         outlist.append('<classVarDec>')
         var_kind, var_name, var_type = None, None, None
@@ -72,6 +76,7 @@ class CompilationEngine:
         outlist.append('</classVarDec>')
 
     def compile_subroutine(self):
+        """Compiles a complete method, function, or constructor."""
         outlist = self.output_list
         self.symbol_table.start_subroutine()
         outlist.append('<subroutineDec>')
@@ -151,6 +156,7 @@ class CompilationEngine:
         outlist.append('</subroutineDec>')
 
     def compile_parameter_list(self):
+        """Compiles a potentially empty parameter list, not including enclosing ()."""
         outlist = self.output_list
         outlist.append('<parameterList>')
         var_kind = 'arg'
@@ -175,6 +181,7 @@ class CompilationEngine:
         outlist.append('</parameterList>')
 
     def compile_var_dec(self):
+        """Compiles a subroutine variable declaration."""
         outlist = self.output_list
         outlist.append('<varDec>')
         var_kind = 'var'
@@ -205,6 +212,7 @@ class CompilationEngine:
         outlist.append('</varDec>')
 
     def compile_statements(self):
+        """Compiles a sequence of statements, doesn't include enclosing {}."""
         outlist = self.output_list
         outlist.append('<statements>')
         while self.tokenizer.current_token != '}':
@@ -222,6 +230,7 @@ class CompilationEngine:
         outlist.append('</statements>')
 
     def compile_do(self):
+        """Compiles a do statement."""
         outlist = self.output_list
         outlist.append('<doStatement>')
         no_class_specified = True
@@ -301,6 +310,7 @@ class CompilationEngine:
         outlist.append('</doStatement>')
 
     def compile_let(self):
+        """Compiles a let statement."""
         outlist = self.output_list
         outlist.append('<letStatement>')
         array_access = False
@@ -358,6 +368,7 @@ class CompilationEngine:
             self.vmwriter.pop('that', 0)
 
     def compile_while(self):
+        """Compiles a while statement."""
         outlist = self.output_list
         outlist.append('<whileStatement>')
         label_number = self.label_count
@@ -388,6 +399,7 @@ class CompilationEngine:
         outlist.append('</whileStatement>')
 
     def compile_return(self):
+        """Compiles a return statement."""
         outlist = self.output_list
         outlist.append('<returnStatement>')
         # 'return' keyword
@@ -407,6 +419,7 @@ class CompilationEngine:
         outlist.append('</returnStatement>')
 
     def compile_if(self):
+        """Compiles an if statement, including optional else statement."""
         outlist = self.output_list
         label_number = self.label_count
         self.label_count += 1
@@ -447,7 +460,8 @@ class CompilationEngine:
         self.vmwriter.label(f'IF_ELSE_END{label_number}')
         outlist.append('</ifStatement>')
 
-    def compile_expression(self): 
+    def compile_expression(self):
+        """Compiles an expression."""
         outlist = self.output_list
         outlist.append('<expression>')
         # nested expression
@@ -491,6 +505,7 @@ class CompilationEngine:
         outlist.append('</expression>')
 
     def compile_term(self):
+        """Compiles a terminal element."""
         outlist = self.output_list
         outlist.append('<term>')
         match self.tokenizer.token_type():
@@ -637,6 +652,7 @@ class CompilationEngine:
         outlist.append('</term>')
 
     def compile_expression_list(self):
+        """Compiles a potentially empty expression list, separated by commas."""
         nargs = 0
         outlist = self.output_list
         outlist.append('<expressionList>')
