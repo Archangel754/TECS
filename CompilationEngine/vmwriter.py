@@ -53,8 +53,7 @@ class VMWriter:
         self.output_list.append('return')
 
     def print_vm_code(self):
-        """Finalizes output file."""
-        # TODO decide whether to return list of output lines, or write file. 
+        """Prints VM code for debugging."""
         for line in self.output_list:
             print(line)
     

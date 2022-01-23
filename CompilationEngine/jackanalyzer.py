@@ -47,7 +47,7 @@ def jack_analyzer_main(filename):
         output_vm_file_name = jackfile[:-5] + '.vm'
         
         # print vm code
-        vmwriter.print_vm_code()
+        # vmwriter.print_vm_code()
 
         # Write output xml file
         #with open(output_file_name,'w') as outfile:
