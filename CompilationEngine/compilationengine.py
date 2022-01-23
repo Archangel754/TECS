@@ -1,8 +1,4 @@
 
-from ast import keyword
-from readline import parse_and_bind
-
-
 class CompilationEngine:
     def __init__(self, tokenizer, vmwriter, output_line_list):
         from symboltable import SymbolTable
@@ -63,7 +59,7 @@ class CompilationEngine:
             if self.tokenizer.current_token not in [',',';']:
                 # token is name of variable to declare: add to table          
                 var_name = self.tokenizer.current_token
-                print(f'Adding {var_name,var_type,var_kind} to symbol table:')
+                # print(f'Adding {var_name,var_type,var_kind} to symbol table:')
                 self.symbol_table.define(var_name,var_type,var_kind)
                 var_index = self.symbol_table.index_of(var_name)
                 xml_string = f'<STentry> define {var_kind} {var_type} {var_name} idx: {var_index} </STentry>'
@@ -82,6 +78,11 @@ class CompilationEngine:
         # compile subroutine type, return type
         # routine_type: function(subroutine), constructor, or method
         routine_type = self.tokenizer.current_token
+        # Add 'this' to symbol table. It is never used, but causes 
+        # arguments to have correct indices when referenced.
+        # (arg 0 is reference to object when methods are called.)
+        if routine_type == 'method': 
+            self.symbol_table.define('this', 'test', 'arg')
         for i in range(2):
             #if i == 2:
                 # print(f'Compiling subroutine: {self.tokenizer.current_token}')
@@ -93,6 +94,7 @@ class CompilationEngine:
         xml_string = f'<IDuse> define subroutine {subroutine_name} </IDuse>'
         outlist.append(xml_string)
         self.tokenizer.advance()
+        #print(f'Define {routine_type} {subroutine_name}')
         # compile '('
         outlist.append(self.tokenizer.token_to_xml())
         self.tokenizer.advance()
@@ -101,7 +103,11 @@ class CompilationEngine:
         # ')'
         outlist.append(self.tokenizer.token_to_xml())
         self.tokenizer.advance()
-
+        # print symbol table:
+        # print(f'Symbol Table for {subroutine_name}:')
+        # print(f'Class table: {self.symbol_table.class_table}')
+        # print(f'Subroutine table: {self.symbol_table.subroutine_table}')
+        # print('\n')
         # compile subroutine body
         outlist.append('<subroutineBody>')
         # '{'
@@ -156,7 +162,7 @@ class CompilationEngine:
                     var_type = self.tokenizer.current_token
                 else:
                     var_name = self.tokenizer.current_token
-                    print(f'Adding {var_name,var_type,var_kind} to symbol table:')
+                    # print(f'Adding {var_name,var_type,var_kind} to symbol table:')
                     self.symbol_table.define(var_name,var_type,var_kind)
                     var_index = self.symbol_table.index_of(var_name)
                     xml_string = f'<STentry> define {var_kind} {var_type} {var_name} idx: {var_index} </STentry>'
@@ -187,7 +193,7 @@ class CompilationEngine:
             if self.tokenizer.current_token not in [',',';']:
                 # token is name of variable to declare: add to table          
                 var_name = self.tokenizer.current_token
-                print(f'Adding {var_name,var_type,var_kind} to symbol table:')
+                # print(f'Adding {var_name,var_type,var_kind} to symbol table:')
                 self.symbol_table.define(var_name,var_type,var_kind)
                 var_index = self.symbol_table.index_of(var_name)
                 xml_string = f'<STentry> define {var_kind} {var_type} {var_name} idx: {var_index} </STentry>'
@@ -220,7 +226,10 @@ class CompilationEngine:
         outlist.append('<doStatement>')
         no_class_specified = True
         nargs = 0
+        current_token_line_idx = -1
         while self.tokenizer.current_token != ';':
+            current_token_line_idx += 1
+            # print(f'token_line_idx: {current_token_line_idx}, token: {self.tokenizer.current_token}')
             if self.tokenizer.current_token == '(':
                 # (
                 self.output_list.append(self.tokenizer.token_to_xml())
@@ -238,6 +247,8 @@ class CompilationEngine:
                     var_name = self.tokenizer.current_token
                     var_kind = self.symbol_table.kind_of(var_name)
                     if var_kind != 'NONE':
+                        # var_name is an object
+                        # 
                         var_index = self.symbol_table.index_of(var_name)
                         var_type = self.symbol_table.type_of(var_name)
                         xml_string = f'<IDuse> use {var_kind} {var_type} {var_name} idx: {var_index} </IDuse>'
@@ -247,6 +258,7 @@ class CompilationEngine:
                     # else check if next is . implies class
                     elif self.tokenizer.look_ahead_token() == '.':
                         if var_kind == 'NONE':
+                            # function call
                             # otherwise var_name is a variable which is instance of some class
                             xml_string = f'<IDuse> use class {var_name} </IDuse>'
                             outlist.append(xml_string)
@@ -255,6 +267,7 @@ class CompilationEngine:
                         
                     # check if next is () implies subroutine
                     elif self.tokenizer.look_ahead_token() == '(':
+                        # this is a subroutine call
                         subroutine_name = self.tokenizer.current_token
                         xml_string = f'<IDuse> use subroutine {subroutine_name} </IDuse>'
                         outlist.append(xml_string)
@@ -267,16 +280,18 @@ class CompilationEngine:
                         #self.symbol_table.define('this', var_type, 'arg')
                         # class name for function call
                         specified_class = self.symbol_table.type_of(var_name)   
+                    if (var_kind == 'NONE' 
+                        and self.tokenizer.look_ahead_token() == '('
+                        and current_token_line_idx == 1): # idx 1 is first word after "do"
+                        # This is a call to method. functions and constructors must be
+                        # called using their full names. See page 189.
+                        specified_class = self.class_name
+                        # 'this' gos on stack before arguments
+                        self.vmwriter.push('pointer', 0) 
+                        nargs += 1
                 self.tokenizer.advance()
         # add vm code for routine call:
-        if no_class_specified:
-            # This is a call to method. functions and constructors must be
-            # called using their full names. See page 189.
-            self.vmwriter.push('pointer', 0)
-            nargs += 1
-            self.vmwriter.call(f'{self.class_name}.{subroutine_name}', nargs) 
-        else:
-            self.vmwriter.call(f'{specified_class}.{subroutine_name}', nargs)
+        self.vmwriter.call(f'{specified_class}.{subroutine_name}', nargs)
         # do always ignores return value (assumes void method or function)
         # pop and ignore the returned value (constant 0)
         self.vmwriter.pop('temp', 0)
@@ -288,6 +303,7 @@ class CompilationEngine:
     def compile_let(self):
         outlist = self.output_list
         outlist.append('<letStatement>')
+        array_access = False
         # 'let'
         self.output_list.append(self.tokenizer.token_to_xml())
         self.tokenizer.advance()
@@ -306,6 +322,7 @@ class CompilationEngine:
             xml_string = f'<IDuse> use {var_kind} {var_type} {var_name} idx: {var_index} </IDuse>'
             outlist.append(xml_string)
         if self.tokenizer.current_token == '[':
+            array_access = True
             # '['
             self.output_list.append(self.tokenizer.token_to_xml())
             self.tokenizer.advance()
@@ -314,6 +331,13 @@ class CompilationEngine:
             # ']'
             self.output_list.append(self.tokenizer.token_to_xml())
             self.tokenizer.advance()
+            # Support for setting values in array:
+            # Expression was index into array, now at top of stack
+            # Add expression to array pointer, put address in temp
+            # pointer 1 will get overwritten by expression after the =
+            self.vmwriter.push(var_kind, var_index) # array base
+            self.vmwriter.arithmetic('add')
+            self.vmwriter.pop('temp', 1)
         # '='
         self.output_list.append(self.tokenizer.token_to_xml())
         self.tokenizer.advance()
@@ -324,7 +348,14 @@ class CompilationEngine:
         self.tokenizer.advance()
         outlist.append('</letStatement>')
         # vm code for setting variable value
-        self.vmwriter.pop(var_kind, var_index)
+        if not array_access:
+            # set variable to top value from stack
+            self.vmwriter.pop(var_kind, var_index)
+        else:
+            # pop value to array entry (address previously stored in temp 1)
+            self.vmwriter.push('temp', 1)
+            self.vmwriter.pop('pointer', 1)
+            self.vmwriter.pop('that', 0)
 
     def compile_while(self):
         outlist = self.output_list
@@ -481,8 +512,6 @@ class CompilationEngine:
                 self.output_list.append(self.tokenizer.token_to_xml())
                 self.tokenizer.advance()
             case 'stringConstant':
-                self.output_list.append(self.tokenizer.token_to_xml())
-                self.tokenizer.advance()
                 # use String.new(length) and String.appendChar(nextChar) to 
                 # generate new string object and then push to stack
                 string = self.tokenizer.current_token
@@ -491,10 +520,12 @@ class CompilationEngine:
                 # nargs is 1 (String.new is constructor)
                 self.vmwriter.call('String.new', 1)
                 for char in string:
-                    self.vmwriter.push('constant', char)
+                    self.vmwriter.push('constant', ord(char))
                     # nargs is 2 because appendChar is a method
                     # string reference is already on stack
-                    self.vmwriter.call('String.appendChar', 2)     
+                    self.vmwriter.call('String.appendChar', 2)  
+                self.output_list.append(self.tokenizer.token_to_xml())
+                self.tokenizer.advance()   
             case 'identifier':
                 # handle varName | varName '[' expression ']' | subroutineName
                 # identifier 'name':
@@ -519,6 +550,14 @@ class CompilationEngine:
                     # ']'
                     self.output_list.append(self.tokenizer.token_to_xml())
                     self.tokenizer.advance()
+                    # Handle Array access:
+                    # Expression was index into array, now at top of stack
+                    # Add expression to array pointer, put address in pointer 1
+                    # push array entry to top of stack
+                    self.vmwriter.push(var_kind, var_index)
+                    self.vmwriter.arithmetic('add')
+                    self.vmwriter.pop('pointer', 1)
+                    self.vmwriter.push('that', 0)
                 elif self.tokenizer.current_token == '(':
                     subroutine_name = self.tokenizer.current_token
                     xml_string = f'<IDuse> use subroutine {subroutine_name} </IDuse>'
@@ -537,6 +576,9 @@ class CompilationEngine:
                         # otherwise var_name is a variable which is instance of some class
                         xml_string = f'<IDuse> use class {var_name} </IDuse>'
                         outlist.append(xml_string)
+                    else:
+                        # push object to be passed as arg 0 to method
+                        self.vmwriter.push(var_kind, var_index)
                     # '.'
                     self.output_list.append(self.tokenizer.token_to_xml())
                     self.tokenizer.advance()  
@@ -554,11 +596,18 @@ class CompilationEngine:
                     # ')'
                     self.output_list.append(self.tokenizer.token_to_xml())
                     self.tokenizer.advance()
-                    self.vmwriter.call(f'{var_name}.{subroutine_name}', nargs)
+                    if var_kind == 'NONE':
+                    # var_name is class name
+                        self.vmwriter.call(f'{var_name}.{subroutine_name}', nargs)
+                    else:
+                        # var_name is instance of class, subroutine is method.
+                        # pass object as argument (see above) and 
+                        # call by the class name(type). nargs+1 for hidden this arg
+                        class_name = self.symbol_table.type_of(var_name)
+                        self.vmwriter.call(f'{class_name}.{subroutine_name}', nargs+1)
                 else: 
                     # reference to variable, need to put on stack
                     self.vmwriter.push(var_kind, var_index)
-
             case 'symbol':
                 match self.tokenizer.current_token:
                     # unaryOp and term
@@ -572,8 +621,7 @@ class CompilationEngine:
                         self.tokenizer.advance() 
                         # term
                         self.compile_term()
-                        self.vmwriter.arithmetic(op_instruction)
-                            
+                        self.vmwriter.arithmetic(op_instruction)         
                     # (expression)
                     case '(':
                         # '('
