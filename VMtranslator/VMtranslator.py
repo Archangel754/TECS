@@ -5,19 +5,17 @@
 # written in assembly to run on the HACK Computer(TECS).
 # Tested on python 3.10.0
 
-
 def VMtranslator_main(filename):
     from vmcodewriter import VMCodeWriter
     from vmparser import VMParser
     import os
-    #handle directory or .vm file
+    # handle directory or .vm file
     if os.path.isdir(filename):
         if filename[-1] == '/':
             base_name = filename[:-1]
         else:
             base_name = filename
-            filename += '/'
-        
+            filename += '/'       
         # make vmfilelist a list of all .vm files in directory:
         vmfilelist = []
         # walk the directory recursively and add only file names to vmfilelist:
@@ -25,23 +23,18 @@ def VMtranslator_main(filename):
             vmfilelist.extend(os.path.join(dirpath,insidefilename) for insidefilename in insidefilenames)
         #print(vmfilelist)
         #base_name = filename # for output file name
-        #print('base_name: ',base_name)
-        
+        #print('base_name: ',base_name)        
     else:
         vmfilelist = [filename]
         base_name = filename[:filename.find('.vm')]
-
-    
     # set output file name and initialize writer:
     asm_name = base_name + '.asm'
     writer = VMCodeWriter(asm_name)
     # initialization:
-    writer.write_init()
-    
+    writer.write_init()   
     for vmfile in [vfile for vfile in vmfilelist if vfile[-3:] == '.vm']: # will change for multiple files
         print(f"Coding {vmfile}.")
         parser = VMParser(vmfile) # change to loop over files
-
         stripped_file_name = os.path.basename(vmfile)[:-3] # get rid of folders,slashes,extensions
         writer.set_file_name(stripped_file_name) # doesn't really do anything yet.may add label later.
         finished = False
@@ -72,14 +65,9 @@ def VMtranslator_main(filename):
                     writer.write_return()
                 case 'C_CALL':
                     writer.write_call(function_name = parser.arg1(), num_args = parser.arg2())
-
             if parser.has_more_commands() == True:
                 parser.advance()
     writer.close()
-
-
-
-
 
 if __name__ == '__main__':
     import sys

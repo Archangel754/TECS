@@ -1,7 +1,7 @@
+### Contains the VMCodeWriter module for the assembler for the Hack Computer TECS ###
 
 class VMCodeWriter():
     """Write a .asm file line by line.
-    
     Takes a .asm file name when initialized.
     Returns object which provides functions for writing 
     assembly commands to file from vm code."""
@@ -40,10 +40,6 @@ class VMCodeWriter():
         # These values were expected on the stack since sys.init never
         # finishes running. Really though, these shouldn't be necessary since
         # sys.init never returns to anything. (instead of @Sys.init, 0;JMP)
-
-        
-        # do LCL, ARG, THIS, THAT need to be initialized here?
-       # should follow same stack setup format as write_call()?
 
     def write_label(self,label):
         """Writes assembly for label command."""
@@ -112,7 +108,6 @@ class VMCodeWriter():
                             "@FRAME",
                             "M=D"] # FRAME is set to address of LCL
         self.lines.extend(command_list)
-
 
         # RET = contents of FRAME-5
         # Setting RET as temp variable for return-address is necessary,
@@ -190,9 +185,9 @@ class VMCodeWriter():
         # stack with value of 0:
         for i in range(num_locals):
             self.write_push_pop('push','constant', 0)
-
+    
     ##################################################################################
-
+    
     def write_arithmetic(self,command: str):
         """Take the top one/two things off of the stack,
         place them in A,D,M as appropriate. Perform the 
@@ -269,8 +264,7 @@ class VMCodeWriter():
                         var_name = f'{self.current_vm_file_name}.{str(index)}'
                         command_string = [f"@{var_name}",
                                               "D=M" #value of static[index] to push to stack is now in D
-                                              ]
-                                              
+                                              ]                                              
                 # now push D onto stack
                 command_string.extend(["@SP",
                                            "A=M // A now points to top of stack",

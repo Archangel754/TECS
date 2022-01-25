@@ -1,17 +1,10 @@
 ### Contains the VM parser module for the assembler for the Hack Computer TECS ###
 
-
-# TODO:
-# arg1
-# arg2
-# command type
-
 class VMParser():
     # takes a .vm file name when initialized. returns object with attributes
     # relating to current command and can be stepped through the vm file.
     def __init__(self,input_file_name):
-        #from symbol_table import AssemblerSymbolTable
-
+        # from symbol_table import AssemblerSymbolTable
         self.lines = []
         with open(input_file_name, 'r') as file:
             for line in file:
@@ -25,7 +18,6 @@ class VMParser():
         #check for empty file:
         if len(self.lines) < 1:
             raise ValueError('VM file is empty')
-        #print(self.lines)
 
         # Initialize a symbol table and do first pass of assembly to:
         # 1. add labels to symbol table
@@ -41,18 +33,12 @@ class VMParser():
         #         newlines.append(line)
         #         counter += 1
         # self.lines = newlines
-
-        #testing:
-        #print('inputfile:',input_file_name)
-        #print(self.lines)
         
         # Attributes:
         self.current_index = 0
         self.current_command = self.lines[self.current_index]
         self.max_index = len(self.lines) - 1
-        
-
-        
+         
     def has_more_commands(self):
         if self.current_index < self.max_index:
             return True
@@ -60,14 +46,14 @@ class VMParser():
             return False
 
     def advance(self):
-        # advances to next command in list
+        """Advances to next command in list."""
         self.current_index += 1
         if self.current_index > self.max_index:
             raise ValueError('Tried to force vmparser advance beyond last command in file.')
         self.current_command = self.lines[self.current_index]
         
     def command_type(self) -> str:
-#       """Returns command type of current command. First word of line is used."""
+        """Returns command type of current command. First word of line is used."""
         command_type = {'add':'C_ARITHMETIC',
                             'sub':'C_ARITHMETIC',
                             'neg':'C_ARITHMETIC',
@@ -98,7 +84,4 @@ class VMParser():
 
     def arg2(self) -> int:
         arg2 = self.current_command.split(' ')[2]
-        #print(self.current_command)
-        #print(arg2)
         return int(arg2)
-        
