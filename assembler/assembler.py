@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3.10
 
 # Takes a .asm assembly file as command line argument and
 # converts it to a .hack file in the same directory, which is
