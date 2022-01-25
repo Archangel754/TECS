@@ -1,3 +1,4 @@
+# Code function for HACK assembler.
 
 def code(mnemonic,mtype):
     # returns binary version of assembly mnemonic of type mtype

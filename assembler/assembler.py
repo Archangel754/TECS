@@ -12,9 +12,6 @@ def assembler_main(filename):
     # load parser object with assembly file
     asm = Parser(filename)
 
-    
-    
-    
     # generate list of assembly commands:
     machine_code = []
     next_variable_loc = 16
@@ -38,8 +35,7 @@ def assembler_main(filename):
                 # variable hasn't been used. add it to table and set @ instr.
                 asm.sym_table.add_entry(asm.symbol(),next_variable_loc)
                 machine_code.append ('0' + assembler_convert_to_15bit_bin(str(next_variable_loc)))
-                next_variable_loc += 1
-                
+                next_variable_loc += 1        
             
         elif asm.command_type() == 'C_COMMAND':
             command = []
@@ -52,10 +48,8 @@ def assembler_main(filename):
         elif asm.command_type() == 'L_COMMAND':
             raise ValueError('L commands should have been dealt with by parser.')
         
-
         if asm.has_more_commands() == True:
             asm.advance()
-
 
     # write the machine code to file with basename + .hack (overwrites)
     #print(machine_code)
@@ -65,10 +59,6 @@ def assembler_main(filename):
         for code in machine_code:
             newfile.write(code)
             newfile.write('\n')
-
-    
-    
-    
 
 def assembler_convert_to_15bit_bin(number):
     # returns 15 bit binary string of input number which is a string

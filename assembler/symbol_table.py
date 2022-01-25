@@ -1,10 +1,9 @@
-# implements the symbol table for the TECS assembler
+# Implements the symbol table module for the TECS assembler.
 
 class AssemblerSymbolTable():
     def __init__(self, assembler_map_init = False):
         self.symbol_table = {}
-
-        # optionally initialize with standard values for HACK Assembler:
+        # Optionally initialize with standard values for HACK Assembler:
         if assembler_map_init == True:
             amap = {'SP':0,
                         'LCL':1,

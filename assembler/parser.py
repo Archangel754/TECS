@@ -1,11 +1,11 @@
 ### Contains the parser module for the assembler for the Hack Computer TECS ###
 
 class Parser():
-    # takes a asm file name when initialized. returns object with attributes
-    # relating to current command and can be stepped through the asm file.
+    """Takes a .asm file name when initialized. returns object with attributes
+    relating to current command and can be stepped through the asm file."""
+    
     def __init__(self,input_file_name):
         from symbol_table import AssemblerSymbolTable
-
         self.lines = []
         with open(input_file_name, 'r') as file:
             for line in file:
@@ -16,10 +16,9 @@ class Parser():
                     stripped_line = line.strip()
                 if len(stripped_line) > 0:
                     self.lines.append(stripped_line)
-        #check for empty file:
+        # Check for empty file:
         if len(self.lines) < 1:
             raise ValueError('assembly file is empty')
-        #print(self.lines)
 
         # Initialize a symbol table and do first pass of assembly to:
         # 1. add labels to symbol table
@@ -29,7 +28,7 @@ class Parser():
         newlines = []
         for line in self.lines:
             if line[0] == '(':
-                #add label to symbol table and remove line
+                # Add label to symbol table and remove line:
                 self.sym_table.add_entry(line[1:-1],counter)
             else:
                 newlines.append(line)
@@ -40,9 +39,7 @@ class Parser():
         self.current_index = 0
         self.current_command = self.lines[self.current_index]
         self.max_index = len(self.lines) - 1
-        
-
-        
+         
     def has_more_commands(self):
         if self.current_index < self.max_index:
             return True
@@ -50,14 +47,14 @@ class Parser():
             return False
 
     def advance(self):
-        # advances to next command in list
+        """Advances to next command in list."""
         self.current_index += 1
         if self.current_index > self.max_index:
             raise ValueError('Tried to force parser advance beyond last command in file.')
         self.current_command = self.lines[self.current_index]
         
     def command_type(self):
-        # checks command type of current command.
+        """Checks command type of current command."""
         # First symbol will be one of '(','@',other
         first_char = self.current_command[0]
         if first_char == '(':
@@ -68,7 +65,7 @@ class Parser():
             return 'C_COMMAND'
 
     def symbol(self):
-        # returns 'Xxx' for @Xxx or (Xxx) command
+        """Returns 'Xxx' for @Xxx or (Xxx) command."""
         if self.current_command[0] == '(':
             return self.current_command.rstrip()[1:-1]
         elif self.current_command[0] == '@':
