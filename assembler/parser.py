@@ -3,7 +3,7 @@
 class Parser():
     """Takes a .asm file name when initialized. returns object with attributes
     relating to current command and can be stepped through the asm file."""
-    
+
     def __init__(self,input_file_name):
         from symbol_table import AssemblerSymbolTable
         self.lines = []
@@ -15,6 +15,7 @@ class Parser():
                 else:
                     stripped_line = line.strip()
                 if len(stripped_line) > 0:
+                    stripped_line = stripped_line.replace(' ','')
                     self.lines.append(stripped_line)
         # Check for empty file:
         if len(self.lines) < 1:
