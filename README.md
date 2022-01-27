@@ -1,7 +1,8 @@
 # TECS
 TECS Jack Compiler for compiling Jack code to run on the HACK hardware design.
 
-TECS Jack Compiler is a compiler for the simple object-based language Jack designed to run on the HACK hardware platform. The code is compiled in three stages. First the CompilationEngine module compiles Jack code into virtual machine (VM) code. The VMtranslator module then compiles the VM code into HACK assembly language (asm). The assembler module translates the assembly language into machine code which runs on the HACK hardware. The simple HACK computer was designed from NAND gates up to a full computer including CPU and memory units. The HACK hardware is simulated on software tools provided by Nisan and Schocken (https://www.nand2tetris.org/).  
+TECS Jack Compiler is a compiler for the simple object-based language Jack designed to run on the HACK hardware platform. The code is compiled in three stages. First the CompilationEngine module compiles Jack code into virtual machine (VM) code. The VMtranslator module then compiles the VM code into HACK assembly language (asm). The assembler module translates the assembly language into machine code which runs on the HACK hardware. The simple HACK computer was designed from NAND gates up to a full computer including CPU and memory units. This project is based on the book *The Elements of Computing Systems* by Nisan and Schocken. The HACK hardware is simulated on software tools provided by the authors.  
+(https://www.nand2tetris.org/)
 
 **Instructions:**  
 The compiler is written entirely in Python, and requires version 3.10.  
